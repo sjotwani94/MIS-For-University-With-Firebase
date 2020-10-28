@@ -27,6 +27,11 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.android.material.navigation.NavigationView;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 public class AdminHomePage extends AppCompatActivity {
     private DrawerLayout dl;
@@ -35,11 +40,20 @@ public class AdminHomePage extends AppCompatActivity {
     ScrollView s1;
     LinearLayout nav_user;
     Button facultyReg,studentReg,viewCourses,addCourse,viewNotices,addNotice;
-    DBHelper dbHelper;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,7 +76,6 @@ public class AdminHomePage extends AppCompatActivity {
         nv = (NavigationView)findViewById(R.id.navigation_view);
         View hView =  nv.getHeaderView(0);
         nav_user = (LinearLayout) hView.findViewById(R.id.nav_layout);
-        dbHelper = new DBHelper(this);
         Bundle b = getIntent().getExtras();
         final String Name = b.getString("Name");
         final String Email = b.getString("Email");
@@ -99,14 +112,25 @@ public class AdminHomePage extends AppCompatActivity {
                         dialog.setPositiveButton("Yes", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int i) {
-                                if (dbHelper.removeAdminEntry(Email)){
-                                    Intent intent1 = new Intent(AdminHomePage.this, RelativeLoginActivity.class);
-                                    startActivity(intent1);
-                                    Toast.makeText(AdminHomePage.this, "Account Deleted",Toast.LENGTH_SHORT).show();
-                                    finish();
-                                }else {
-                                    Toast.makeText(AdminHomePage.this, "Error!", Toast.LENGTH_SHORT).show();
-                                }
+                                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Admin");
+                                dbRef.addValueEventListener(new ValueEventListener() {
+
+                                    @Override
+                                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                        Intent int1=new Intent(AdminHomePage.this,RelativeLoginActivity.class);
+                                        String userkey = DatabaseHelper.retrieveKey(snapshot,Email);
+                                        DatabaseHelper.deleteAdmin(userkey);
+                                        Toast.makeText(getApplicationContext(), "Account Deleted", Toast.LENGTH_LONG).show();
+                                        startActivity(int1);
+                                        finish();
+                                    }
+
+                                    @Override
+                                    public void onCancelled(@NonNull DatabaseError error) {
+                                        alertFirebaseFailure(error);
+                                        error.toException();
+                                    }
+                                });
                             }
                         });
                         dialog.setNegativeButton("No", new DialogInterface.OnClickListener() {

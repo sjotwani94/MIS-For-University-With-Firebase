@@ -25,8 +25,15 @@ import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class WhatsAppActivity extends AppCompatActivity implements Spinner.OnItemSelectedListener{
     Spinner callList,roleList;
@@ -35,13 +42,21 @@ public class WhatsAppActivity extends AppCompatActivity implements Spinner.OnIte
     String[] roles;
     List<String> contactNames = new ArrayList<String>();
     List<Long> contactNumbers = new ArrayList<Long>();
-    DBHelper dbHelper;
-    Cursor adminCursor, facultyCursor, studentCursor;
     RelativeLayout s1;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,7 +68,6 @@ public class WhatsAppActivity extends AppCompatActivity implements Spinner.OnIte
         selectedContact=findViewById(R.id.selected_number);
         composedMessage=findViewById(R.id.composed_message);
         smsNum=findViewById(R.id.submit);
-        dbHelper = new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -97,56 +111,84 @@ public class WhatsAppActivity extends AppCompatActivity implements Spinner.OnIte
             case R.id.role_selector:
                 switch (position){
                     case 0:
-                        adminCursor = dbHelper.getAdminContacts();
-                        adminCursor.moveToFirst();
-                        contactNames.clear();
-                        contactNumbers.clear();
-                        Log.d("AdminList", "No. of Tuples: "+adminCursor.getCount());
-                        for (int i =0; i<adminCursor.getCount();i++)
-                        {
-                            contactNames.add(adminCursor.getString(0));
-                            contactNumbers.add(adminCursor.getLong(1));
-                            adminCursor.moveToNext();
-                        }
-                        adminCursor.close();
-                        ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, contactNames);
-                        adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                        callList.setAdapter(adapter1);
-                        callList.setOnItemSelectedListener(this);
+                        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Admin");
+                        dbRef.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                //Map<String,List<String>> map = DatabaseHelper.getContactDetails(snapshot);
+                                ArrayList<AdminDetails> adminDetails = DatabaseHelper.getAdminDetails(snapshot);
+                                contactNames.clear();
+                                contactNumbers.clear();
+                                for (int i=0;i<adminDetails.size();i++){
+                                    contactNames.add(adminDetails.get(i).getName());
+                                    contactNumbers.add(adminDetails.get(i).getContactNo());
+                                }
+                                ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_spinner_item, contactNames);
+                                adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                                callList.setAdapter(adapter1);
+                                callList.setOnItemSelectedListener(WhatsAppActivity.this);
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                         break;
                     case 1:
-                        facultyCursor = dbHelper.getFacultyContacts();
-                        facultyCursor.moveToFirst();
-                        contactNames.clear();
-                        contactNumbers.clear();
-                        for (int i =0; i<facultyCursor.getCount();i++)
-                        {
-                            contactNames.add(facultyCursor.getString(0));
-                            contactNumbers.add(facultyCursor.getLong(1));
-                            facultyCursor.moveToNext();
-                        }
-                        facultyCursor.close();
-                        ArrayAdapter<String> adapter2 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, contactNames);
-                        adapter2.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                        callList.setAdapter(adapter2);
-                        callList.setOnItemSelectedListener(this);
+                        DatabaseReference dbRef1 = FirebaseDatabase.getInstance().getReference("/Faculty");
+                        dbRef1.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                //Map<String,List<String>> map = DatabaseHelper.getContactDetails(snapshot);
+                                contactNames.clear();
+                                contactNumbers.clear();
+                                ArrayList<FacultyDetails> facultyDetails = DatabaseHelper.getFacultyDetails(snapshot);
+                                for (int i=0;i<facultyDetails.size();i++){
+                                    contactNames.add(facultyDetails.get(i).getName());
+                                    contactNumbers.add(facultyDetails.get(i).getContactNo());
+                                }
+                                ArrayAdapter<String> adapter2 = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_spinner_item, contactNames);
+                                adapter2.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                                callList.setAdapter(adapter2);
+                                callList.setOnItemSelectedListener(WhatsAppActivity.this);
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                         break;
                     case 2:
-                        studentCursor = dbHelper.getStudentContacts();
-                        studentCursor.moveToFirst();
-                        contactNames.clear();
-                        contactNumbers.clear();
-                        for (int i =0; i<studentCursor.getCount();i++)
-                        {
-                            contactNames.add(studentCursor.getString(0));
-                            contactNumbers.add(studentCursor.getLong(1));
-                            studentCursor.moveToNext();
-                        }
-                        studentCursor.close();
-                        ArrayAdapter<String> adapter3 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, contactNames);
-                        adapter3.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                        callList.setAdapter(adapter3);
-                        callList.setOnItemSelectedListener(this);
+                        DatabaseReference dbRef2 = FirebaseDatabase.getInstance().getReference("/Student");
+                        dbRef2.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                contactNames.clear();
+                                contactNumbers.clear();
+                                ArrayList<StudentDetails> studentDetails = DatabaseHelper.getStudentDetails(snapshot);
+                                for (int i=0;i<studentDetails.size();i++){
+                                    contactNames.add(studentDetails.get(i).getName());
+                                    contactNumbers.add(studentDetails.get(i).getContactNo());
+                                }
+                                ArrayAdapter<String> adapter3 = new ArrayAdapter<String>(getApplicationContext(), android.R.layout.simple_spinner_item, contactNames);
+                                adapter3.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                                callList.setAdapter(adapter3);
+                                callList.setOnItemSelectedListener(WhatsAppActivity.this);
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                         break;
                 }
                 break;

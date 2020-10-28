@@ -24,6 +24,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.math.BigInteger;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+
 public class RegistrationActivity extends AppCompatActivity {
     ScrollView s1;
     Button ib1;
@@ -36,6 +40,19 @@ public class RegistrationActivity extends AppCompatActivity {
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public static String md5(String input) {
+        String md5 = null;
+        if(null == input) return null;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            digest.update(input.getBytes(), 0, input.length());
+            md5 = new BigInteger(1, digest.digest()).toString(16);
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        }
+        return md5;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,17 +126,23 @@ public class RegistrationActivity extends AppCompatActivity {
                         }
                         String Password = pass.getText().toString();
 
-                        long rowCount = dbHelper.saveRegistrationDetails(Name,EMail,Address,Age,ContactNo,Gender,Password);
-
-                        if (rowCount>0){
+                        //String emailPattern = "[a-zA-Z0-9._-]+@[a-z]+\\.+[a-z]+";
+                        String emailPattern = "^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$";
+                        if (Age < 17){
+                            Toast.makeText(getApplicationContext(), "You Are Not Eligible!", Toast.LENGTH_LONG).show();
+                        }else if (!EMail.matches(emailPattern)){
+                            Toast.makeText(getApplicationContext(), "Invalid E-Mail Address...", Toast.LENGTH_LONG).show();
+                        }else if (String.valueOf(ContactNo).length()!=10){
+                            Toast.makeText(getApplicationContext(), "Mobile Number Should have 10 Digits...", Toast.LENGTH_LONG).show();
+                        }else {
+                            AdminDetails adminDetails = new AdminDetails(Name,EMail,Address,Age,ContactNo,Gender,md5(Password));
+                            DatabaseHelper.addNewAdmin(adminDetails);
                             Toast toast=new Toast(getApplicationContext());
                             toast.setDuration(Toast.LENGTH_LONG);
                             toast.setView(layout);
                             toast.show();
                             startActivity(int1);
                             finish();
-                        }else {
-                            Toast.makeText(RegistrationActivity.this, "No Rows Inserted", Toast.LENGTH_SHORT).show();
                         }
                     }
                 }

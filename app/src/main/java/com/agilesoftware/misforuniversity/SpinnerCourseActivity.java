@@ -5,7 +5,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
@@ -20,6 +19,12 @@ import android.widget.RelativeLayout;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,13 +34,25 @@ public class SpinnerCourseActivity extends AppCompatActivity {
     List<String> listOfCourses = new ArrayList<String>();
     List<String> listOfRollNos = new ArrayList<String>();
     List<String> listOfCourseCodes = new ArrayList<String>();
-    DBHelper dbHelper;
-    String selectedCourse,selectedRollNo;
+    List<String> listOfCourseNames = new ArrayList<String>();
+    ArrayList<StudentDetails> studentDetails = new ArrayList<StudentDetails>();
+    ArrayList<CourseDetails> courseDetails = new ArrayList<CourseDetails>();
+    String selectedCourse,selectedCourseName,selectedRollNo;
     RelativeLayout s1;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,7 +62,6 @@ public class SpinnerCourseActivity extends AppCompatActivity {
         coursesList=findViewById(R.id.list_courses);
         rollNosList=findViewById(R.id.list_roll_nos);
         submit=findViewById(R.id.submit_course);
-        dbHelper = new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -58,76 +74,94 @@ public class SpinnerCourseActivity extends AppCompatActivity {
                 getSupportActionBar().setTitle((Html.fromHtml("<font color=\"#0000FF\">" + getSupportActionBar().getTitle() + "</font>")));
             }
         }
-        Cursor cursor = dbHelper.getStudentRollNo();
-        cursor.moveToFirst();
-        for (int i =0; i<cursor.getCount();i++)
-        {
-            listOfRollNos.add(cursor.getString(0));
-            cursor.moveToNext();
-        }
-        cursor.close();
-        Cursor cursor1 = dbHelper.getCourseDetails();
-        cursor1.moveToFirst();
-        for (int i =0; i<cursor1.getCount();i++)
-        {
-            listOfCourseCodes.add(cursor1.getString(0));
-            listOfCourses.add(cursor1.getString(0)+" ("+cursor1.getString(1)+")");
-            cursor1.moveToNext();
-        }
-        cursor1.close();
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, listOfCourses);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        coursesList.setAdapter(adapter);
-        coursesList.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Student");
+        dbRef.addValueEventListener(new ValueEventListener() {
+
             @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                switch (parent.getId()){
-                    case R.id.list_courses:
-                        switch (position){
-                            default:
-                                selectedCourse = listOfCourseCodes.get(position);
-                                break;
-                        }
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                studentDetails = DatabaseHelper.getStudentDetails(snapshot);
+                for (int i =0; i<studentDetails.size();i++)
+                {
+                    listOfRollNos.add(studentDetails.get(i).getRollNo());
                 }
+                ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(SpinnerCourseActivity.this, android.R.layout.simple_spinner_item, listOfRollNos);
+                adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                rollNosList.setAdapter(adapter1);
+                rollNosList.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                        switch (parent.getId()){
+                            case R.id.list_roll_nos:
+                                switch (position){
+                                    default:
+                                        selectedRollNo = listOfRollNos.get(position);
+                                        break;
+                                }
+                        }
+                    }
+
+                    @Override
+                    public void onNothingSelected(AdapterView<?> parent) {
+
+                    }
+                });
             }
 
             @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
             }
         });
-        ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, listOfRollNos);
-        adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        rollNosList.setAdapter(adapter1);
-        rollNosList.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+        DatabaseReference dbRef1 = FirebaseDatabase.getInstance().getReference("/Courses");
+        dbRef1.addValueEventListener(new ValueEventListener() {
+
             @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                switch (parent.getId()){
-                    case R.id.list_roll_nos:
-                        switch (position){
-                            default:
-                                selectedRollNo = listOfRollNos.get(position);
-                                break;
-                        }
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                courseDetails = DatabaseHelper.getCourseDetails(snapshot);
+                for (int i =0; i<courseDetails.size();i++)
+                {
+                    listOfCourseCodes.add(courseDetails.get(i).getCourseCode());
+                    listOfCourseNames.add(courseDetails.get(i).getCourseName());
+                    listOfCourses.add(courseDetails.get(i).getCourseCode()+" ("+courseDetails.get(i).getCourseName()+")");
                 }
+                ArrayAdapter<String> adapter = new ArrayAdapter<String>(SpinnerCourseActivity.this, android.R.layout.simple_spinner_item, listOfCourses);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                coursesList.setAdapter(adapter);
+                coursesList.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+                    @Override
+                    public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                        switch (parent.getId()){
+                            case R.id.list_courses:
+                                switch (position){
+                                    default:
+                                        selectedCourse = listOfCourseCodes.get(position);
+                                        selectedCourseName = listOfCourseNames.get(position);
+                                        break;
+                                }
+                        }
+                    }
+
+                    @Override
+                    public void onNothingSelected(AdapterView<?> parent) {
+
+                    }
+                });
             }
 
             @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
             }
         });
 
         submit.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                long result = dbHelper.saveStudentCourseDetails(selectedRollNo,selectedCourse);
-                if (result>0){
-                    Toast.makeText(getApplicationContext(), "Enrollment Successful", Toast.LENGTH_LONG).show();
-                }
-                else {
-                    Toast.makeText(getApplicationContext(), "Some Technical Errors", Toast.LENGTH_LONG).show();
-                }
+                StudentEnrollments studentEnrollments = new StudentEnrollments(selectedRollNo,selectedCourse,selectedCourseName,0,0,0,0,0,0,0);
+                DatabaseHelper.addStudentEnrollment(studentEnrollments);
+                Toast.makeText(getApplicationContext(), "Enrollment Successful", Toast.LENGTH_LONG).show();
             }
         });
     }

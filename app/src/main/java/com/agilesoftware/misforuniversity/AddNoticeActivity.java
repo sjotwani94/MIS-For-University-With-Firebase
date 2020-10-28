@@ -7,6 +7,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.app.ProgressDialog;
+import android.content.ContentResolver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -17,17 +19,27 @@ import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.text.Html;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.webkit.MimeTypeMap;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ScrollView;
 import android.widget.Toast;
+
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,9 +48,11 @@ public class AddNoticeActivity extends AppCompatActivity {
     EditText noticeSubject,noticeDescription;
     ImageView noticeImage;
     ScrollView s1;
-    Button submitNotice;
-    DBHelper dbHelper;
+    Button submitNotice,savePhoto;
     Uri selectedImage;
+    private ProgressDialog progressDialog;
+    private String imageDownloadUrl;
+    private int status=0;
     private static final int MY_PERMISSIONS_REQUEST_READ_EXTERNAL_STORAGE = 1;
     private static final int MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 1;
     SharedPreferences sharedpreferences;
@@ -55,8 +69,9 @@ public class AddNoticeActivity extends AppCompatActivity {
         noticeImage=findViewById(R.id.image_notice);
         noticeDescription=findViewById(R.id.composed_message);
         s1=findViewById(R.id.scroller);
+        savePhoto=findViewById(R.id.save_photo);
         submitNotice=findViewById(R.id.submit);
-        dbHelper=new DBHelper(this);
+        progressDialog = new ProgressDialog(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -76,6 +91,12 @@ public class AddNoticeActivity extends AppCompatActivity {
                 startActivityForResult(intent, 2);
             }
         });
+        savePhoto.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                UploadImageFileToFirebaseStorage();
+            }
+        });
         submitNotice.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -86,45 +107,35 @@ public class AddNoticeActivity extends AppCompatActivity {
                 else {
                     String position = getIntent().getExtras().getString("Position");
                     if (position.matches("Administrator")){
-                        try {
-                            String name = getIntent().getExtras().getString("Name") + " (Administrator)";
-                            String subject = noticeSubject.getText().toString();
-                            String description = noticeDescription.getText().toString();
-                            InputStream iStream = null;
-                            iStream = getContentResolver().openInputStream(selectedImage);
-                            byte[] inputData = Utils1.getBytes(iStream);
-                            long rowCount = dbHelper.saveNoticeDetails(name,subject,inputData,description);
-                            if (rowCount>0){
-                                noticeSubject.setText("");
-                                noticeDescription.setText("");
-                                noticeImage.setImageDrawable(null);
-                                Toast.makeText(AddNoticeActivity.this, "Notice Posted Successfully", Toast.LENGTH_SHORT).show();
-                            }else {
-                                Toast.makeText(AddNoticeActivity.this, "No Rows Inserted", Toast.LENGTH_SHORT).show();
-                            }
-                        } catch (IOException e){
-                            e.printStackTrace();
+                        String name = getIntent().getExtras().getString("Name") + " (Administrator)";
+                        String subject = noticeSubject.getText().toString();
+                        String description = noticeDescription.getText().toString();
+                        if (status!=1){
+                            Toast.makeText(AddNoticeActivity.this, "Please Save Photo", Toast.LENGTH_LONG).show();
+                        }else {
+                            Log.d("Image Download Link", imageDownloadUrl);
+                            NoticeDetails noticeDetails = new NoticeDetails(name,subject,imageDownloadUrl,description);
+                            DatabaseHelper.addNewNotice(noticeDetails);
+                            noticeSubject.setText("");
+                            noticeDescription.setText("");
+                            noticeImage.setImageDrawable(null);
+                            Toast.makeText(AddNoticeActivity.this, "Notice Posted Successfully", Toast.LENGTH_SHORT).show();
                         }
                     }
                     else if (position.matches("Faculty")){
-                        try {
-                            String name = "Prof. " + getIntent().getExtras().getString("Name");
-                            String subject = noticeSubject.getText().toString();
-                            String description = noticeDescription.getText().toString();
-                            InputStream iStream = null;
-                            iStream = getContentResolver().openInputStream(selectedImage);
-                            byte[] inputData = Utils1.getBytes(iStream);
-                            long rowCount = dbHelper.saveNoticeDetails(name,subject,inputData,description);
-                            if (rowCount>0){
-                                noticeSubject.setText("");
-                                noticeDescription.setText("");
-                                noticeImage.setImageDrawable(null);
-                                Toast.makeText(AddNoticeActivity.this, "Notice Posted Successfully", Toast.LENGTH_SHORT).show();
-                            }else {
-                                Toast.makeText(AddNoticeActivity.this, "No Rows Inserted", Toast.LENGTH_SHORT).show();
-                            }
-                        } catch (IOException e){
-                            e.printStackTrace();
+                        String name = "Prof. " + getIntent().getExtras().getString("Name");
+                        String subject = noticeSubject.getText().toString();
+                        String description = noticeDescription.getText().toString();
+                        if (status!=1){
+                            Toast.makeText(AddNoticeActivity.this, "Please Save Photo", Toast.LENGTH_LONG).show();
+                        }else {
+                            Log.d("Image Download Link", imageDownloadUrl);
+                            NoticeDetails noticeDetails = new NoticeDetails(name,subject,imageDownloadUrl,description);
+                            DatabaseHelper.addNewNotice(noticeDetails);
+                            noticeSubject.setText("");
+                            noticeDescription.setText("");
+                            noticeImage.setImageDrawable(null);
+                            Toast.makeText(AddNoticeActivity.this, "Notice Posted Successfully", Toast.LENGTH_SHORT).show();
                         }
                     }
                 }
@@ -195,6 +206,102 @@ public class AddNoticeActivity extends AppCompatActivity {
                 noticeImage.setImageBitmap(BitmapFactory.decodeFile(picturePath));
                 cursor.close();
             }
+        }
+    }
+
+    // Creating Method to get the selected image file Extension from File Path URI.
+    public String GetFileExtension(Uri uri) {
+        ContentResolver contentResolver = getContentResolver();
+        MimeTypeMap mimeTypeMap = MimeTypeMap.getSingleton();
+        // Returning the file Extension.
+        return mimeTypeMap.getExtensionFromMimeType(contentResolver.getType(uri)) ;
+    }
+
+    // Creating Method to get the selected image file Extension from File Path URI.
+    public String GetFileName(Uri uri) {
+        String result = null;
+        if (uri.getScheme().equals("content")) {
+            Cursor cursor = getContentResolver().query(uri, null, null, null, null);
+            try {
+                if (cursor != null && cursor.moveToFirst()) {
+                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                }
+            } finally {
+                cursor.close();
+            }
+        }
+        if (result == null) {
+            result = uri.getPath();
+            int cut = result.lastIndexOf('/');
+            if (cut != -1) {
+                result = result.substring(cut + 1);
+            }
+        }
+        return result;
+    }
+
+    // Creating UploadImageFileToFirebaseStorage method to upload image on storage.
+    public void UploadImageFileToFirebaseStorage() {
+
+        // Checking whether FilePathUri Is empty or not.
+        if (selectedImage != null) {
+
+            // Setting progressDialog Title.
+            progressDialog.setTitle("Image is Uploading...");
+
+            // Showing progressDialog.
+            progressDialog.show();
+            StorageReference storageReference = FirebaseStorage.getInstance().getReference().child("Image Files");
+            // Creating second StorageReference.
+            StorageReference storageReference2nd = storageReference.child(GetFileName(selectedImage));
+
+            // Adding addOnSuccessListener to second StorageReference.
+            storageReference2nd.putFile(selectedImage)
+                    .addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+
+                            // Hiding the progressDialog after done uploading.
+                            progressDialog.dismiss();
+
+                            // Showing toast message after done uploading.
+                            Toast.makeText(getApplicationContext(), "Image Uploaded Successfully ", Toast.LENGTH_LONG).show();
+
+                            Task<Uri> task = taskSnapshot.getMetadata().getReference().getDownloadUrl();
+                            task.addOnSuccessListener(new OnSuccessListener<Uri>() {
+                                @Override
+                                public void onSuccess(Uri uri) {
+                                    imageDownloadUrl = uri.toString();
+                                    status++;
+                                }
+                            });
+                        }
+                    })
+                    // If something goes wrong .
+                    .addOnFailureListener(new OnFailureListener() {
+                        @Override
+                        public void onFailure(@NonNull Exception exception) {
+
+                            // Hiding the progressDialog.
+                            progressDialog.dismiss();
+
+                            // Showing exception error message.
+                            Toast.makeText(AddNoticeActivity.this, exception.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    })
+
+                    // On progress change upload time.
+                    .addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                        @Override
+                        public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
+                            double p=(100.0*taskSnapshot.getBytesTransferred())/taskSnapshot.getTotalByteCount();
+                            progressDialog.setMessage((int) p+" % Uploading...");
+
+                        }
+                    });
+        }
+        else {
+            Toast.makeText(AddNoticeActivity.this, "Please Select Image or Add Image Name", Toast.LENGTH_LONG).show();
         }
     }
 

@@ -23,6 +23,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.squareup.picasso.Picasso;
+
 import java.io.UnsupportedEncodingException;
 import java.util.List;
 
@@ -64,14 +66,15 @@ public class NoticeListAdapter extends RecyclerView.Adapter<NoticeListAdapter.My
         holder.noticeSender.setText(listData.getNoticeSender());
         holder.noticeSubject.setText(listData.getNoticeSubject());
         holder.noticeDescription.setText(listData.getNoticeDescription());
-        final byte[] bb = listData.getNoticeImage();
-        holder.noticeImage.setImageBitmap(BitmapFactory.decodeByteArray(bb, 0, bb.length));
+        Picasso.get().load(listData.getNoticeImage()).into(holder.noticeImage);
+        //final byte[] bb = listData.getNoticeImage();
+        //holder.noticeImage.setImageBitmap(BitmapFactory.decodeByteArray(bb, 0, bb.length));
         holder.shareWhatsApp.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 PackageManager pm = context.getPackageManager();
                 try {
-                    String s = new String(bb, "UTF-8");
+                    /*String s = new String(bb, "UTF-8");
                     Uri bitmapUri = Uri.parse(s);
                     Bitmap imgBitmap=BitmapFactory.decodeByteArray(bb, 0, bb.length);
                     String imgBitmapPath="";
@@ -105,9 +108,9 @@ public class NoticeListAdapter extends RecyclerView.Adapter<NoticeListAdapter.My
                         // Permission has already been granted
                         imgBitmapPath= MediaStore.Images.Media.insertImage(context.getContentResolver(),imgBitmap,"title",null);
                     }
-                    Uri imgBitmapUri=Uri.parse(imgBitmapPath);
+                    Uri imgBitmapUri=Uri.parse(imgBitmapPath);*/
                     Intent sendIntent = new Intent(Intent.ACTION_SEND);
-                    sendIntent.putExtra(Intent.EXTRA_STREAM, imgBitmapUri);
+                    sendIntent.putExtra(Intent.EXTRA_STREAM, listData.getNoticeImage());
                     sendIntent.setType("image/*");
                     sendIntent.putExtra(Intent.EXTRA_TEXT, listData.getNoticeSubject()+"\n"+listData.getNoticeSender()+"\n"+listData.getNoticeDescription());
                     PackageInfo info=pm.getPackageInfo("com.whatsapp", PackageManager.GET_ACTIVITIES);
@@ -119,8 +122,6 @@ public class NoticeListAdapter extends RecyclerView.Adapter<NoticeListAdapter.My
                 } catch (PackageManager.NameNotFoundException e) {
                     Toast.makeText(context, "WhatsApp not Installed", Toast.LENGTH_SHORT)
                             .show();
-                } catch (UnsupportedEncodingException e) {
-                    e.printStackTrace();
                 }
             }
         });

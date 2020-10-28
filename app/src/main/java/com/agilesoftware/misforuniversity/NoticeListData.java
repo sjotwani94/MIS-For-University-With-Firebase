@@ -3,7 +3,7 @@ package com.agilesoftware.misforuniversity;
 public class NoticeListData {
     private String noticeSender;
     private String noticeSubject;
-    private byte[] noticeImage;
+    private String noticeImage;
     private String noticeDescription;
 
     public String getNoticeSender() {
@@ -22,11 +22,11 @@ public class NoticeListData {
         this.noticeSubject = noticeSubject;
     }
 
-    public byte[] getNoticeImage() {
+    public String getNoticeImage() {
         return noticeImage;
     }
 
-    public void setNoticeImage(byte[] noticeImage) {
+    public void setNoticeImage(String noticeImage) {
         this.noticeImage = noticeImage;
     }
 
@@ -38,7 +38,7 @@ public class NoticeListData {
         this.noticeDescription = noticeDescription;
     }
 
-    public NoticeListData(String noticeSender, String noticeSubject, byte[] noticeImage, String noticeDescription) {
+    public NoticeListData(String noticeSender, String noticeSubject, String noticeImage, String noticeDescription) {
         this.noticeSender = noticeSender;
         this.noticeSubject = noticeSubject;
         this.noticeImage = noticeImage;

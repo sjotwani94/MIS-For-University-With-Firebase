@@ -19,6 +19,12 @@ import android.widget.EditText;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 public class ResetPasswordActivity extends AppCompatActivity {
     EditText pass,confirmpass;
     Button submit;
@@ -28,6 +34,16 @@ public class ResetPasswordActivity extends AppCompatActivity {
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,30 +80,41 @@ public class ResetPasswordActivity extends AppCompatActivity {
                 }
                 else {
                     if (pass.getText().toString().matches(confirmpass.getText().toString())){
-                        boolean result = dbHelper.resetPassword(Email,Position,pass.getText().toString());
-                        Log.d("Result", "Query Updation: "+result);
-                        if (result){
-                            Toast.makeText(ResetPasswordActivity.this, "Password Reset Successful!", Toast.LENGTH_LONG).show();
-                            Bundle bundle = new Bundle();
-                            bundle.putString("Email",Email);
-                            bundle.putString("Position",Position);
-                            bundle.putString("Name",getIntent().getExtras().getString("Name"));
-                            bundle.putString("Department",getIntent().getExtras().getString("Department"));
-                            if (Position.matches("Faculty")){
-                                Intent intent = new Intent(ResetPasswordActivity.this,FacultyHomePage.class);
-                                intent.putExtras(bundle);
-                                startActivity(intent);
-                                finish();
+                        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/"+Position);
+                        dbRef.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                String userkey = DatabaseHelper.retrieveKey(snapshot,Email);
+                                DatabaseHelper.updateUserPassword(Position,userkey,pass.getText().toString());
+                                Toast.makeText(ResetPasswordActivity.this, "Password Reset Successful!", Toast.LENGTH_LONG).show();
+                                Bundle bundle = new Bundle();
+                                bundle.putString("Email",Email);
+                                bundle.putString("Position",Position);
+                                bundle.putString("Name",getIntent().getExtras().getString("Name"));
+                                bundle.putString("Department",getIntent().getExtras().getString("Department"));
+                                if (Position.matches("Faculty")){
+                                    Intent intent = new Intent(ResetPasswordActivity.this,FacultyHomePage.class);
+                                    intent.putExtras(bundle);
+                                    startActivity(intent);
+                                    finish();
+                                }
+                                else if (Position.matches("Student")){
+                                    Intent intent = new Intent(ResetPasswordActivity.this,StudentHomePage.class);
+                                    bundle.putString("RollNo",getIntent().getExtras().getString("RollNo"));
+                                    bundle.putInt("YearOfPass",getIntent().getExtras().getInt("YearOfPass"));
+                                    intent.putExtras(bundle);
+                                    startActivity(intent);
+                                    finish();
+                                }
                             }
-                            else if (Position.matches("Student")){
-                                Intent intent = new Intent(ResetPasswordActivity.this,StudentHomePage.class);
-                                bundle.putString("RollNo",getIntent().getExtras().getString("RollNo"));
-                                bundle.putInt("YearOfPass",getIntent().getExtras().getInt("YearOfPass"));
-                                intent.putExtras(bundle);
-                                startActivity(intent);
-                                finish();
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
                             }
-                        }
+                        });
                     }
                 }
             }

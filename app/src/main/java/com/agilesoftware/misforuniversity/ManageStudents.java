@@ -8,7 +8,6 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
@@ -20,6 +19,12 @@ import android.view.View;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,8 +33,7 @@ public class ManageStudents extends AppCompatActivity {
     RecyclerView rc1;
     private List<ManageStudentData> functionsList = new ArrayList<>();
     private ManageStudentAdapter adapter;
-    DBHelper dbHelper;
-    Cursor cursor;
+    ArrayList<StudentDetails> studentDetails = new ArrayList<StudentDetails>();
     List<String> studentName = new ArrayList<String>();
     List<String> studentEmail = new ArrayList<String>();
     List<String> studentDept = new ArrayList<String>();
@@ -38,6 +42,17 @@ public class ManageStudents extends AppCompatActivity {
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -51,7 +66,6 @@ public class ManageStudents extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         s1 = findViewById(R.id.scroller);
         rc1 = findViewById(R.id.recycler_functions);
-        dbHelper=new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -65,25 +79,35 @@ public class ManageStudents extends AppCompatActivity {
             }
         }
 
-        cursor = dbHelper.getStudentRegistrationDetail();
-        cursor.moveToFirst();
-        for (int i=0;i<cursor.getCount();i++){
-            studentName.add(cursor.getString(1));
-            studentEmail.add(cursor.getString(2));
-            studentDept.add(cursor.getString(7));
-            studentBatch.add(cursor.getString(9));
-            cursor.moveToNext();
-        }
-        cursor.close();
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Student");
+        dbRef.addValueEventListener(new ValueEventListener() {
 
-        for (int len=0;len<studentName.size();len++){
-            functionsList.add(new ManageStudentData(studentName.get(len),studentEmail.get(len),studentDept.get(len),Integer.parseInt(studentBatch.get(len))));
-        }
-        adapter = new ManageStudentAdapter(functionsList,this);
-        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext());
-        linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-        rc1.setLayoutManager(linearLayoutManager);
-        rc1.setAdapter(adapter);
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                studentDetails = DatabaseHelper.getStudentDetails(snapshot);
+                for (int i=0;i<studentDetails.size();i++){
+                    studentName.add(studentDetails.get(i).getName());
+                    studentEmail.add(studentDetails.get(i).getEMail());
+                    studentDept.add(studentDetails.get(i).getDepartment());
+                    studentBatch.add(String.valueOf(studentDetails.get(i).getBatch()));
+                }
+
+                for (int len=0;len<studentName.size();len++){
+                    functionsList.add(new ManageStudentData(studentName.get(len),studentEmail.get(len),studentDept.get(len),Integer.parseInt(studentBatch.get(len))));
+                }
+                adapter = new ManageStudentAdapter(functionsList,ManageStudents.this);
+                LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext());
+                linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+                rc1.setLayoutManager(linearLayoutManager);
+                rc1.setAdapter(adapter);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
     }
 
     @Override

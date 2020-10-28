@@ -11,14 +11,21 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.provider.ContactsContract;
 import android.text.Html;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ArrayAdapter;
 import android.widget.RelativeLayout;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +37,7 @@ public class ViewNoticesActivity extends AppCompatActivity {
     Cursor cursor;
     List<String> noticeSender = new ArrayList<String>();
     List<String> noticeSubject = new ArrayList<String>();
-    List<byte[]> noticeImage = new ArrayList<byte[]>();
+    List<String> noticeImage = new ArrayList<String>();
     List<String> noticeDescription = new ArrayList<String>();
     private List<NoticeListData> functionsList = new ArrayList<NoticeListData>();
     private NoticeListAdapter adapter;
@@ -39,6 +46,16 @@ public class ViewNoticesActivity extends AppCompatActivity {
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,24 +77,34 @@ public class ViewNoticesActivity extends AppCompatActivity {
                 getSupportActionBar().setTitle((Html.fromHtml("<font color=\"#0000FF\">" + getSupportActionBar().getTitle() + "</font>")));
             }
         }
-        cursor = dbHelper.getNoticeDetails();
-        cursor.moveToFirst();
-        for (int i=0;i<cursor.getCount();i++){
-            noticeSender.add(cursor.getString(0));
-            noticeSubject.add(cursor.getString(1));
-            noticeImage.add(cursor.getBlob(2));
-            noticeDescription.add(cursor.getString(3));
-            cursor.moveToNext();
-        }
-        cursor.close();
-        for (int len=0;len<noticeSender.size();len++){
-            functionsList.add(new NoticeListData(noticeSender.get(len),noticeSubject.get(len),noticeImage.get(len),noticeDescription.get(len)));
-        }
-        adapter = new NoticeListAdapter(this,functionsList);
-        LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext());
-        linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
-        recyclerView.setLayoutManager(linearLayoutManager);
-        recyclerView.setAdapter(adapter);
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Notices");
+        dbRef.addValueEventListener(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                ArrayList<NoticeDetails> noticeDetails = DatabaseHelper.getNoticeDetails(snapshot);
+                for (int i=0;i<noticeDetails.size();i++){
+                    noticeSender.add(noticeDetails.get(i).getNoticeSender());
+                    noticeSubject.add(noticeDetails.get(i).getNoticeSubject());
+                    noticeImage.add(noticeDetails.get(i).getNoticeImage());
+                    noticeDescription.add(noticeDetails.get(i).getNoticeDescription());
+                }
+                for (int len=0;len<noticeSender.size();len++){
+                    functionsList.add(new NoticeListData(noticeSender.get(len),noticeSubject.get(len),noticeImage.get(len),noticeDescription.get(len)));
+                }
+                adapter = new NoticeListAdapter(ViewNoticesActivity.this,functionsList);
+                LinearLayoutManager linearLayoutManager = new LinearLayoutManager(getApplicationContext());
+                linearLayoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+                recyclerView.setLayoutManager(linearLayoutManager);
+                recyclerView.setAdapter(adapter);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
 
         if (getIntent().getExtras().getString("Position").matches("Student")){
             floatingActionButton.setVisibility(View.GONE);

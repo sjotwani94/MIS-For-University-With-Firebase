@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MIS for University</string>
+    <string name="app_name">University MIS</string>
     <string name="candidate_name">Name</string>
     <string name="candidate_detail">Personal Details</string>
     <string name="education_qualification">Education Qualification</string>
@@ -15,6 +15,7 @@
     <string name="student_marks">Student\'s Marks</string>
     <string name="nim_short">ITNU</string>
     <string name="nim_long">Nirma University</string>
+    <string name="forgot_password_title">Forgot\nPassword</string>
     <string name="title_activity_admin_home_page">AdminHomePageActivity</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
@@ -53,4 +54,7 @@
         <item>Faculty</item>
         <item>Student</item>
     </string-array>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

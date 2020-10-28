@@ -18,15 +18,30 @@ import android.widget.EditText;
 import android.widget.ScrollView;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 public class AddNewCourse extends AppCompatActivity {
     EditText courseName,courseCode,courseDescription,semester,coursePrerequisites;
     Button submit;
     ScrollView s1;
-    DBHelper dbHelper;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,7 +54,6 @@ public class AddNewCourse extends AppCompatActivity {
         coursePrerequisites=findViewById(R.id.edt_prerequisites);
         submit=findViewById(R.id.submit);
         s1=findViewById(R.id.scroller);
-        dbHelper=new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -62,16 +76,30 @@ public class AddNewCourse extends AppCompatActivity {
                     Toast.makeText(AddNewCourse.this, "Please Enter All Details", Toast.LENGTH_SHORT).show();
                 }
                 else {
-                    long result = dbHelper.saveCourseDetails(courseCode.getText().toString(),courseName.getText().toString(),courseDescription.getText().toString(),Integer.parseInt(semester.getText().toString()),coursePrerequisites.getText().toString());
-                    if (result>0){
-                        Toast.makeText(AddNewCourse.this, "Course Added Successfully", Toast.LENGTH_SHORT).show();
-                        Intent intent = new Intent(getApplicationContext(),ListViewActivity.class);
-                        startActivity(intent);
-                        finish();
-                    }
-                    else {
-                        Toast.makeText(AddNewCourse.this, "Redundancy Not Allowed!", Toast.LENGTH_SHORT).show();
-                    }
+                    DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Courses");
+                    dbRef.addValueEventListener(new ValueEventListener() {
+
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            String userkey = DatabaseHelper.retrieveCourseKey(snapshot,courseCode.getText().toString());
+                            if (userkey!=null){
+                                Toast.makeText(AddNewCourse.this, "Redundancy Not Allowed!", Toast.LENGTH_SHORT).show();
+                            }else {
+                                CourseDetails courseDetails = new CourseDetails(courseCode.getText().toString(),courseName.getText().toString(),courseDescription.getText().toString(),Integer.parseInt(semester.getText().toString()),coursePrerequisites.getText().toString());
+                                DatabaseHelper.addNewCourse(courseDetails);
+                                Toast.makeText(AddNewCourse.this, "Course Added Successfully", Toast.LENGTH_SHORT).show();
+                                Intent intent = new Intent(getApplicationContext(),ListViewActivity.class);
+                                startActivity(intent);
+                                finish();
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+                            alertFirebaseFailure(error);
+                            error.toException();
+                        }
+                    });
                 }
             }
         });

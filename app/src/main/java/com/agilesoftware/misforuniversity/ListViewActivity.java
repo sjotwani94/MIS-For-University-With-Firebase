@@ -9,7 +9,6 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
@@ -26,6 +25,12 @@ import android.widget.SearchView;
 import android.widget.TextView;
 
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
+import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 
@@ -40,13 +45,22 @@ public class ListViewActivity extends AppCompatActivity implements AdapterView.O
     ArrayList<Integer> semester = new ArrayList<Integer>();
     ArrayList<String> coursePrerequisites = new ArrayList<String>();
     ArrayAdapter<String> adapter;
-    Cursor fetched;
-    DBHelper dbHelper;
+    ArrayList<CourseDetails> courseDetails = new ArrayList<CourseDetails>();
     RelativeLayout s1;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -72,7 +86,6 @@ public class ListViewActivity extends AppCompatActivity implements AdapterView.O
         searchCourse=findViewById(R.id.search_course);
         listOfCourses=findViewById(R.id.list_of_courses);
         listOfCourses.setOnItemClickListener(this);
-        dbHelper = new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -85,22 +98,31 @@ public class ListViewActivity extends AppCompatActivity implements AdapterView.O
                 getSupportActionBar().setTitle((Html.fromHtml("<font color=\"#0000FF\">" + getSupportActionBar().getTitle() + "</font>")));
             }
         }
-        fetched = dbHelper.getCourseDetails();
-        fetched.moveToFirst();
-        for (int i =0; i<fetched.getCount();i++)
-        {
-            courseCode.add(fetched.getString(0));
-            courseName.add(fetched.getString(1));
-            courseDescription.add(fetched.getString(2));
-            semester.add(fetched.getInt(3));
-            coursePrerequisites.add(fetched.getString(4));
-            courseDetailed.add(fetched.getString(0)+" ("+fetched.getString(1)+")");
-            fetched.moveToNext();
-        }
-        fetched.close();
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Courses");
+        dbRef.addValueEventListener(new ValueEventListener() {
 
-        adapter=new ArrayAdapter<String>(this, android.R.layout.simple_list_item_1,courseDetailed);
-        listOfCourses.setAdapter(adapter);
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                courseDetails = DatabaseHelper.getCourseDetails(snapshot);
+                for (int i=0;i<courseDetails.size();i++){
+                    courseCode.add(courseDetails.get(i).getCourseCode());
+                    courseName.add(courseDetails.get(i).getCourseName());
+                    courseDescription.add(courseDetails.get(i).getCourseDescription());
+                    semester.add(courseDetails.get(i).getSemester());
+                    coursePrerequisites.add(courseDetails.get(i).getCoursePrerequisites());
+                    courseDetailed.add(courseDetails.get(i).getCourseCode()+" ("+courseDetails.get(i).getCourseName()+")");
+                }
+
+                adapter=new ArrayAdapter<String>(ListViewActivity.this, android.R.layout.simple_list_item_1,courseDetailed);
+                listOfCourses.setAdapter(adapter);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
 
         searchCourse.setActivated(true);
         searchCourse.setQueryHint("Type your keyword here");
@@ -147,7 +169,7 @@ public class ListViewActivity extends AppCompatActivity implements AdapterView.O
                 switch (position){
                     default:
                         final String Code = courseCode.get(position);
-                        String Name = courseName.get(position);
+                        final String Name = courseName.get(position);
                         String Description = courseDescription.get(position);
                         int Semester = semester.get(position);
                         String Prerequisite = coursePrerequisites.get(position);
@@ -157,7 +179,22 @@ public class ListViewActivity extends AppCompatActivity implements AdapterView.O
                         dialog.setPositiveButton("Delete", new DialogInterface.OnClickListener() {
                             @Override
                             public void onClick(DialogInterface dialogInterface, int i) {
-                                boolean result = dbHelper.removeCourse(Code);
+                                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Courses");
+                                dbRef.addValueEventListener(new ValueEventListener() {
+
+                                    @Override
+                                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                        String userkey = DatabaseHelper.retrieveCourseKey(snapshot,Code);
+                                        DatabaseHelper.deleteCourse(userkey);
+                                    }
+
+                                    @Override
+                                    public void onCancelled(@NonNull DatabaseError error) {
+                                        alertFirebaseFailure(error);
+                                        error.toException();
+                                    }
+                                });
+                                Snackbar.make(listOfCourses,"Entry of "+Name+" Deleted",Snackbar.LENGTH_LONG).show();
                                 onResume();
                             }
                         });

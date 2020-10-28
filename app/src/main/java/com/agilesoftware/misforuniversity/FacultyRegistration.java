@@ -133,9 +133,17 @@ public class FacultyRegistration extends AppCompatActivity implements DatePicker
                     String Department = department.getSelectedItem().toString();
                     String Position = position.getSelectedItem().toString();
 
-                    long rowCount = dbHelper.saveFacultyRegistrationDetails(Name,EMail,Address,Age,ContactNo,Gender,Department,Position,JoinDate,"changeme");
-
-                    if (rowCount>0){
+                    //String emailPattern = "[a-zA-Z0-9._-]+@[a-z]+\\.+[a-z]+";
+                    String emailPattern = "^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$";
+                    if (Age < 17){
+                        Toast.makeText(getApplicationContext(), "You Are Not Eligible!", Toast.LENGTH_LONG).show();
+                    }else if (!EMail.matches(emailPattern)){
+                        Toast.makeText(getApplicationContext(), "Invalid E-Mail Address...", Toast.LENGTH_LONG).show();
+                    }else if (String.valueOf(ContactNo).length()!=10){
+                        Toast.makeText(getApplicationContext(), "Mobile Number Should have 10 Digits...", Toast.LENGTH_LONG).show();
+                    }else {
+                        FacultyDetails facultyDetails = new FacultyDetails(Name,EMail,Address,Age,ContactNo,Gender,Department,Position,JoinDate,"changeme");
+                        DatabaseHelper.addNewFaculty(facultyDetails);
                         Toast toast=new Toast(getApplicationContext());
                         toast.setDuration(Toast.LENGTH_LONG);
                         toast.setView(layout);
@@ -143,8 +151,6 @@ public class FacultyRegistration extends AppCompatActivity implements DatePicker
                         int1.putExtras(bundle);
                         startActivity(int1);
                         finish();
-                    }else {
-                        Toast.makeText(FacultyRegistration.this, "No Rows Inserted", Toast.LENGTH_SHORT).show();
                     }
                 }
             }

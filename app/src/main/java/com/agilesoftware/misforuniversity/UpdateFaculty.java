@@ -7,10 +7,10 @@ import android.app.DatePickerDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
+import android.util.Log;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -28,6 +28,13 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
 import java.util.Calendar;
 
 public class UpdateFaculty extends AppCompatActivity implements DatePickerDialog.OnDateSetListener {
@@ -37,17 +44,27 @@ public class UpdateFaculty extends AppCompatActivity implements DatePickerDialog
     EditText name,email,address,age,contact,joindate;
     Spinner department,position;
     RadioButton ge1,ge2;
-    DBHelper dbHelper;
     String[] departments,positions;
-    String EmailID;
+    String EmailID, Gender, password, userKey;
     private Calendar mCalendar;
     private int mYear, mMonth, mDay;
-    private int index;
+    private String index;
     private String mDate;
+    ArrayList<FacultyDetails> facultyDetails = new ArrayList<FacultyDetails>();
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -67,7 +84,6 @@ public class UpdateFaculty extends AppCompatActivity implements DatePickerDialog
         position=findViewById(R.id.edt_position);
         ge1=findViewById(R.id.rb_male);
         ge2=findViewById(R.id.rb_female);
-        dbHelper=new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -84,37 +100,49 @@ public class UpdateFaculty extends AppCompatActivity implements DatePickerDialog
         positions=getResources().getStringArray(R.array.position);
 
         EmailID=getIntent().getExtras().getString("Email");
-        index=getIntent().getExtras().getInt("Index");
-        Cursor cursor = dbHelper.getFacultyRegistrationDetails(EmailID);
-        cursor.moveToFirst();
-        name.setText(cursor.getString(1));
-        email.setText(cursor.getString(2));
-        address.setText(cursor.getString(3));
-        age.setText(String.valueOf(cursor.getInt(4)));
-        contact.setText(String.valueOf(cursor.getLong(5)));
-        if (cursor.getString(6).matches("Male")){
-            ge1.setChecked(true);
-        }else if (cursor.getString(6).matches("Female")){
-            ge2.setChecked(true);
-        }
-        String dept = cursor.getString(7);
-        String pos = cursor.getString(8);
-        joindate.setText(cursor.getString(9));
-        cursor.close();
+        index=getIntent().getExtras().getString("Index");
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Faculty");
+        dbRef.addValueEventListener(new ValueEventListener() {
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, departments);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        department.setAdapter(adapter);
-        int spinner1Position = 0;
-        spinner1Position = adapter.getPosition(dept);
-        department.setSelection(spinner1Position);
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                facultyDetails = DatabaseHelper.getFacultyDetailsEmail(snapshot,EmailID);
+                name.setText(facultyDetails.get(0).getName());
+                email.setText(facultyDetails.get(0).getEMail());
+                address.setText(facultyDetails.get(0).getAddress());
+                age.setText(String.valueOf(facultyDetails.get(0).getAge()));
+                contact.setText(String.valueOf(facultyDetails.get(0).getContactNo()));
+                if (facultyDetails.get(0).getGender().matches("Male")){
+                    ge1.setChecked(true);
+                }else if (facultyDetails.get(0).getGender().matches("Female")){
+                    ge2.setChecked(true);
+                }
+                String dept = facultyDetails.get(0).getDepartment();
+                String pos = facultyDetails.get(0).getPosition();
+                joindate.setText(facultyDetails.get(0).getJoinDate());
+                password = facultyDetails.get(0).getPassword();
 
-        ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, positions);
-        adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        position.setAdapter(adapter1);
-        int spinner2Position = 0;
-        spinner2Position = adapter1.getPosition(pos);
-        position.setSelection(spinner2Position);
+                ArrayAdapter<String> adapter = new ArrayAdapter<String>(UpdateFaculty.this, android.R.layout.simple_spinner_item, departments);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                department.setAdapter(adapter);
+                int spinner1Position = 0;
+                spinner1Position = adapter.getPosition(dept);
+                department.setSelection(spinner1Position);
+
+                ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(UpdateFaculty.this, android.R.layout.simple_spinner_item, positions);
+                adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                position.setAdapter(adapter1);
+                int spinner2Position = 0;
+                spinner2Position = adapter1.getPosition(pos);
+                position.setSelection(spinner2Position);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
 
         ib1.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -126,39 +154,59 @@ public class UpdateFaculty extends AppCompatActivity implements DatePickerDialog
                     Toast.makeText(UpdateFaculty.this, "Some Text Field is Empty...", Toast.LENGTH_SHORT).show();
                 }
                 else {
-                    Intent int1=new Intent(UpdateFaculty.this,ManageFaculties.class);
+                    final Intent int1=new Intent(UpdateFaculty.this,ManageFaculties.class);
                     LayoutInflater li1=getLayoutInflater();
-                    View layout=li1.inflate(R.layout.custom_toast, (ViewGroup) findViewById(R.id.custom_toast_layout));
+                    final View layout=li1.inflate(R.layout.custom_toast, (ViewGroup) findViewById(R.id.custom_toast_layout));
                     TextView txt= (TextView) layout.findViewById(R.id.text_toast);
                     txt.setText("Faculty Updated Successfully!");
 
-                    String Name = name.getText().toString();
-                    String EMail = email.getText().toString();
-                    String Address = address.getText().toString();
-                    int Age = Integer.parseInt(age.getText().toString());
-                    long ContactNo = Long.parseLong(contact.getText().toString());
-                    String Gender = "None";
+                    final String Name = name.getText().toString();
+                    final String EMail = email.getText().toString();
+                    final String Address = address.getText().toString();
+                    final int Age = Integer.parseInt(age.getText().toString());
+                    final long ContactNo = Long.parseLong(contact.getText().toString());
                     if(ge1.isChecked()){
                         Gender = "Male";
                     }
                     else if (ge2.isChecked()){
                         Gender = "Female";
                     }
-                    String JoinDate = joindate.getText().toString();
-                    String Department = department.getSelectedItem().toString();
-                    String Position = position.getSelectedItem().toString();
+                    final String JoinDate = joindate.getText().toString();
+                    final String Department = department.getSelectedItem().toString();
+                    final String Position = position.getSelectedItem().toString();
 
-                    long rowCount = dbHelper.updateFacultyRegistrationDetails(index,Name,EMail,Address,Age,ContactNo,Gender,Department,Position,JoinDate);
-
-                    if (rowCount>0){
-                        Toast toast=new Toast(getApplicationContext());
-                        toast.setDuration(Toast.LENGTH_LONG);
-                        toast.setView(layout);
-                        toast.show();
-                        startActivity(int1);
-                        finish();
+                    String emailPattern = "^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$";
+                    //String emailPatternTwo = "[a-zA-Z0-9._-]+@[a-z]+\\.+[a-z]+\\.+[a-z]+";
+                    if (Age < 17){
+                        Toast.makeText(getApplicationContext(), "You Are Not Eligible!", Toast.LENGTH_LONG).show();
+                    }else if (!EMail.matches(emailPattern)){
+                        Toast.makeText(getApplicationContext(), "Invalid E-Mail Address...", Toast.LENGTH_LONG).show();
+                    }else if (String.valueOf(ContactNo).length()!=10){
+                        Toast.makeText(getApplicationContext(), "Mobile Number Should have 10 Digits...", Toast.LENGTH_LONG).show();
                     }else {
-                        Toast.makeText(UpdateFaculty.this, "No Rows Updated", Toast.LENGTH_SHORT).show();
+                        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Faculty");
+                        dbRef.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                userKey = DatabaseHelper.retrieveKey(snapshot,EMail);
+                                Log.d("Faculty Key", userKey);
+                                FacultyDetails facultyDetails = new FacultyDetails(Name,EMail,Address,Age,ContactNo,Gender,Department,Position,JoinDate,password);
+                                DatabaseHelper.updateFaculty(userKey,facultyDetails);
+                                Toast toast=new Toast(getApplicationContext());
+                                toast.setDuration(Toast.LENGTH_LONG);
+                                toast.setView(layout);
+                                toast.show();
+                                startActivity(int1);
+                                finish();
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                     }
                 }
             }

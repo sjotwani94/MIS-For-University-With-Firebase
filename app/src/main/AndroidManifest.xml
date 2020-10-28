@@ -11,46 +11,48 @@
 
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_mislogo"
+        android:icon="@mipmap/ic_mislogo_new"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:requestLegacyExternalStorage="true"
         android:theme="@style/AppTheme">
-        <activity android:name="com.agilesoftware.misforuniversity.UpdateStudent"></activity>
-        <activity android:name="com.agilesoftware.misforuniversity.UpdateFaculty" />
-        <activity android:name="com.agilesoftware.misforuniversity.ManageStudents" />
-        <activity android:name="com.agilesoftware.misforuniversity.ManageFaculties" />
-        <activity android:name="com.agilesoftware.misforuniversity.AddNoticeActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.ViewNoticesActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.WhatsAppActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.EmailActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.MessageActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.AttendanceDisplayActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.UpdateAttendanceActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.UpdateResultActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.AddNewCourse" />
-        <activity android:name="com.agilesoftware.misforuniversity.StudentHomePage" />
-        <activity android:name="com.agilesoftware.misforuniversity.FacultyHomePage" />
-        <activity android:name="com.agilesoftware.misforuniversity.ResetPasswordActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.StudentRegistration" />
-        <activity android:name="com.agilesoftware.misforuniversity.FacultyRegistration" />
-        <activity android:name="com.agilesoftware.misforuniversity.AdminHomePage" />
-        <activity android:name="com.agilesoftware.misforuniversity.SplashActivity">
+        <activity android:name=".ForgotPassword"></activity>
+        <activity android:name=".UpdateStudent" />
+        <activity android:name=".UpdateFaculty" />
+        <activity android:name=".ManageStudents" />
+        <activity android:name=".ManageFaculties" />
+        <activity android:name=".AddNoticeActivity" />
+        <activity android:name=".ViewNoticesActivity" />
+        <activity android:name=".WhatsAppActivity" />
+        <activity android:name=".EmailActivity" />
+        <activity android:name=".MessageActivity" />
+        <activity android:name=".AttendanceDisplayActivity" />
+        <activity android:name=".UpdateAttendanceActivity" />
+        <activity android:name=".UpdateResultActivity" />
+        <activity android:name=".AddNewCourse" />
+        <activity android:name=".StudentHomePage" />
+        <activity android:name=".FacultyHomePage" />
+        <activity android:name=".ResetPasswordActivity" />
+        <activity android:name=".StudentRegistration" />
+        <activity android:name=".FacultyRegistration" />
+        <activity android:name=".AdminHomePage" />
+        <activity android:name=".SplashActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name="com.agilesoftware.misforuniversity.ListViewActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.SpinnerCourseActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.WebViewActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.CalculatorActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.ContactActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.AfterLoginActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.RegistrationActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.RelativeLoginActivity" />
-        <activity android:name="com.agilesoftware.misforuniversity.ResultDisplayActivity" />
+        <activity android:name=".ListViewActivity" />
+        <activity android:name=".SpinnerCourseActivity" />
+        <activity android:name=".WebViewActivity" />
+        <activity android:name=".CalculatorActivity" />
+        <activity android:name=".ContactActivity" />
+        <activity android:name=".AfterLoginActivity" />
+        <activity android:name=".RegistrationActivity" />
+        <activity android:name=".RelativeLoginActivity" />
+        <activity android:name=".ResultDisplayActivity" />
     </application>
 
 </manifest>

@@ -32,14 +32,24 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import com.google.android.material.snackbar.Snackbar;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.util.ArrayList;
 
 public class RelativeLoginActivity extends AppCompatActivity {
     Button b1,b2;
     EditText e1,e2;
+    TextView forgotPassword;
     ScrollView mainLayout;
     DBHelper dbHelper;
     Drawable drawable;
@@ -47,6 +57,16 @@ public class RelativeLoginActivity extends AppCompatActivity {
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,6 +77,7 @@ public class RelativeLoginActivity extends AppCompatActivity {
         b2=findViewById(R.id.register);
         e1=findViewById(R.id.edt_name);
         e2=findViewById(R.id.edt_pwd);
+        forgotPassword=findViewById(R.id.forgot_password);
         dbHelper = new DBHelper(this);
         mainLayout=findViewById(R.id.main_layout);
         drawable = mainLayout.getBackground();
@@ -83,159 +104,190 @@ public class RelativeLoginActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 if (e1.getText().toString().matches("") || e2.getText().toString().matches("")){
-                    Toast.makeText(RelativeLoginActivity.this, "Please Enter Credentials...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(RelativeLoginActivity.this, "Please Enter All Credentials...", Toast.LENGTH_SHORT).show();
                 }
                 else {
-                    String email = e1.getText().toString();
-                    String password = e2.getText().toString();
-                    boolean result = dbHelper.getSavedDetails(email,password);
-                    boolean result1 = dbHelper.getFacultySavedDetails(email,password);
-                    boolean result2 = dbHelper.getStudentSavedDetails(email,password);
-                    Log.d("result", "Query Found Admin: "+result);
-                    Log.d("result1", "Query Found Faculty: "+result1);
-                    Log.d("result2", "Query Found Student: "+result2);
-                    if (result){
-                        Toast.makeText(RelativeLoginActivity.this, "Logged In...", Toast.LENGTH_SHORT).show();
-                        Intent adminIntent = new Intent(RelativeLoginActivity.this, AdminHomePage.class);
-                        String name="";
-                        Cursor cursor = dbHelper.getRequestedData("SELECT * FROM registration_details WHERE EMail='"+email+"' AND Password='"+password+"'");
-                        cursor.moveToFirst();
-                        for (int i=0;i<cursor.getCount();i++){
-                            name=cursor.getString(1);
-                            cursor.moveToNext();
+                    final String userEmailID = e1.getText().toString();
+                    final String userPwd = e2.getText().toString();
+                    AlertDialog.Builder dialog = new AlertDialog.Builder(RelativeLoginActivity.this);
+                    dialog.setTitle("Role of User");
+                    dialog.setMessage("How do you want to login as?");
+                    dialog.setPositiveButton("Faculty", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Faculty");
+                            dbRef.addValueEventListener(new ValueEventListener() {
+
+                                @Override
+                                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                    int result = DatabaseHelper.fetchLoginDetails(snapshot,userEmailID,userPwd);
+                                    if (result==0){
+                                        Snackbar snackbar = Snackbar.make(b1,"Successfully Logged in as Faculty",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                        if(userPwd.matches("changeme")){
+                                            Intent facultyIntent = new Intent(RelativeLoginActivity.this, ResetPasswordActivity.class);
+                                            Bundle bundle = new Bundle();
+                                            ArrayList<FacultyDetails> facultyDetails = DatabaseHelper.getFacultyDetailsEmail(snapshot,userEmailID);
+                                            String name = facultyDetails.get(0).getName();
+                                            String department = facultyDetails.get(0).getDepartment();
+                                            bundle.putString("Position","Faculty");
+                                            bundle.putString("Email",userEmailID);
+                                            bundle.putString("Password",userPwd);
+                                            bundle.putString("Name",name);
+                                            bundle.putString("Department",department);
+                                            facultyIntent.putExtras(bundle);
+                                            SharedPreferences.Editor editor = sharedpreferences.edit();
+                                            editor.putString(Email, userEmailID);
+                                            editor.commit();
+                                            startActivity(facultyIntent);
+                                            finish();
+                                        }else {
+                                            Intent facultyIntent = new Intent(RelativeLoginActivity.this, FacultyHomePage.class);
+                                            Bundle bundle = new Bundle();
+                                            ArrayList<FacultyDetails> facultyDetails = DatabaseHelper.getFacultyDetailsEmail(snapshot,userEmailID);
+                                            String name = facultyDetails.get(0).getName();
+                                            String department = facultyDetails.get(0).getDepartment();
+                                            bundle.putString("Position","Faculty");
+                                            bundle.putString("Email",userEmailID);
+                                            bundle.putString("Password",userPwd);
+                                            bundle.putString("Name",name);
+                                            bundle.putString("Department",department);
+                                            facultyIntent.putExtras(bundle);
+                                            SharedPreferences.Editor editor = sharedpreferences.edit();
+                                            editor.putString(Email, userEmailID);
+                                            editor.commit();
+                                            startActivity(facultyIntent);
+                                            finish();
+                                        }
+                                    }else if (result==1){
+                                        Snackbar snackbar = Snackbar.make(b1,"Invalid Credentials for Faculty",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(@NonNull DatabaseError error) {
+                                    alertFirebaseFailure(error);
+                                    error.toException();
+                                }
+                            });
+                            onResume();
                         }
-                        cursor.close();
-                        Bundle bundle = new Bundle();
-                        bundle.putString("Position","Admin");
-                        bundle.putString("Email",email);
-                        bundle.putString("Password",password);
-                        bundle.putString("Name",name);
-                        adminIntent.putExtras(bundle);
-                        SharedPreferences.Editor editor = sharedpreferences.edit();
-                        editor.putString(Email, email);
-                        editor.commit();
-                        startActivity(adminIntent);
-                        finish();
-                    }
-                    else if(result1){
-                        Toast.makeText(RelativeLoginActivity.this, "Logged In...", Toast.LENGTH_SHORT).show();
-                        if(password.matches("changeme")){
-                            Intent facultyIntent = new Intent(RelativeLoginActivity.this, ResetPasswordActivity.class);
-                            Bundle bundle = new Bundle();
-                            String name="";
-                            String department="";
-                            Cursor cursor = dbHelper.getRequestedData("SELECT * FROM faculty_registrations WHERE EMail='"+email+"' AND Password='"+password+"'");
-                            cursor.moveToFirst();
-                            for (int i=0;i<cursor.getCount();i++){
-                                name=cursor.getString(1);
-                                department=cursor.getString(7);
-                                cursor.moveToNext();
-                            }
-                            cursor.close();
-                            bundle.putString("Position","Faculty");
-                            bundle.putString("Email",email);
-                            bundle.putString("Password",password);
-                            bundle.putString("Name",name);
-                            bundle.putString("Department",department);
-                            facultyIntent.putExtras(bundle);
-                            SharedPreferences.Editor editor = sharedpreferences.edit();
-                            editor.putString(Email, email);
-                            editor.commit();
-                            startActivity(facultyIntent);
-                            finish();
-                        }else {
-                            Intent facultyIntent = new Intent(RelativeLoginActivity.this, FacultyHomePage.class);
-                            Bundle bundle = new Bundle();
-                            String name="";
-                            String department="";
-                            Cursor cursor = dbHelper.getRequestedData("SELECT * FROM faculty_registrations WHERE EMail='"+email+"' AND Password='"+password+"'");
-                            cursor.moveToFirst();
-                            for (int i=0;i<cursor.getCount();i++){
-                                name=cursor.getString(1);
-                                department=cursor.getString(7);
-                                cursor.moveToNext();
-                            }
-                            cursor.close();
-                            bundle.putString("Position","Faculty");
-                            bundle.putString("Email",email);
-                            bundle.putString("Password",password);
-                            bundle.putString("Name",name);
-                            bundle.putString("Department",department);
-                            facultyIntent.putExtras(bundle);
-                            SharedPreferences.Editor editor = sharedpreferences.edit();
-                            editor.putString(Email, email);
-                            editor.commit();
-                            startActivity(facultyIntent);
-                            finish();
+                    });
+
+                    dialog.setNegativeButton("Student", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Student");
+                            dbRef.addValueEventListener(new ValueEventListener() {
+
+                                @Override
+                                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                    int result = DatabaseHelper.fetchLoginDetails(snapshot,userEmailID,userPwd);
+                                    if (result==0){
+                                        Snackbar snackbar = Snackbar.make(b1,"Successfully Logged in as Student",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                        if(userPwd.matches("changeme")){
+                                            Intent studentIntent = new Intent(RelativeLoginActivity.this, ResetPasswordActivity.class);
+                                            Bundle bundle = new Bundle();
+                                            ArrayList<StudentDetails> studentDetails = DatabaseHelper.getStudentDetailsEmail(snapshot,userEmailID);
+                                            String name=studentDetails.get(0).getName();
+                                            String department=studentDetails.get(0).getDepartment();
+                                            String rollno=studentDetails.get(0).getRollNo();
+                                            int yearofpass=studentDetails.get(0).getBatch();
+                                            bundle.putString("Name",name);
+                                            bundle.putString("Department",department);
+                                            bundle.putString("RollNo",rollno);
+                                            bundle.putInt("YearOfPass",yearofpass);
+                                            bundle.putString("Position","Student");
+                                            bundle.putString("Email",userEmailID);
+                                            bundle.putString("Password",userPwd);
+                                            studentIntent.putExtras(bundle);
+                                            SharedPreferences.Editor editor = sharedpreferences.edit();
+                                            editor.putString(Email, userEmailID);
+                                            editor.commit();
+                                            startActivity(studentIntent);
+                                            finish();
+                                        }else {
+                                            Intent studentIntent = new Intent(RelativeLoginActivity.this, StudentHomePage.class);
+                                            Bundle bundle = new Bundle();
+                                            ArrayList<StudentDetails> studentDetails = DatabaseHelper.getStudentDetailsEmail(snapshot,userEmailID);
+                                            String name=studentDetails.get(0).getName();
+                                            String department=studentDetails.get(0).getDepartment();
+                                            String rollno=studentDetails.get(0).getRollNo();
+                                            int yearofpass=studentDetails.get(0).getBatch();
+                                            bundle.putString("Name",name);
+                                            bundle.putString("Department",department);
+                                            bundle.putString("RollNo",rollno);
+                                            bundle.putInt("YearOfPass",yearofpass);
+                                            bundle.putString("Position","Student");
+                                            bundle.putString("Email",userEmailID);
+                                            bundle.putString("Password",userPwd);
+                                            studentIntent.putExtras(bundle);
+                                            SharedPreferences.Editor editor = sharedpreferences.edit();
+                                            editor.putString(Email, userEmailID);
+                                            editor.commit();
+                                            startActivity(studentIntent);
+                                            finish();
+                                        }
+                                    }else if (result==1){
+                                        Snackbar snackbar = Snackbar.make(b1,"Invalid Credentials for Student",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(@NonNull DatabaseError error) {
+                                    alertFirebaseFailure(error);
+                                    error.toException();
+                                }
+                            });
+                            onResume();
                         }
-                    }
-                    else if (result2){
-                        Toast.makeText(RelativeLoginActivity.this, "Logged In...", Toast.LENGTH_SHORT).show();
-                        if(password.matches("changeme")){
-                            Intent studentIntent = new Intent(RelativeLoginActivity.this, ResetPasswordActivity.class);
-                            Bundle bundle = new Bundle();
-                            String name="";
-                            String department="";
-                            String rollno="";
-                            int yearofpass=2021;
-                            Cursor cursor = dbHelper.getRequestedData("SELECT * FROM student_registrations WHERE EMail='"+email+"' AND Password='"+password+"'");
-                            cursor.moveToFirst();
-                            for (int i=0;i<cursor.getCount();i++){
-                                name=cursor.getString(1);
-                                department=cursor.getString(7);
-                                rollno=cursor.getString(8);
-                                yearofpass=cursor.getInt(9);
-                                cursor.moveToNext();
-                            }
-                            cursor.close();
-                            bundle.putString("Name",name);
-                            bundle.putString("Department",department);
-                            bundle.putString("RollNo",rollno);
-                            bundle.putInt("YearOfPass",yearofpass);
-                            bundle.putString("Position","Student");
-                            bundle.putString("Email",email);
-                            bundle.putString("Password",password);
-                            studentIntent.putExtras(bundle);
-                            SharedPreferences.Editor editor = sharedpreferences.edit();
-                            editor.putString(Email, email);
-                            editor.commit();
-                            startActivity(studentIntent);
-                            finish();
-                        }else {
-                            Intent studentIntent = new Intent(RelativeLoginActivity.this, StudentHomePage.class);
-                            Bundle bundle = new Bundle();
-                            String name="";
-                            String department="";
-                            String rollno="";
-                            int yearofpass=2021;
-                            Cursor cursor = dbHelper.getRequestedData("SELECT * FROM student_registrations WHERE EMail='"+email+"' AND Password='"+password+"'");
-                            cursor.moveToFirst();
-                            for (int i=0;i<cursor.getCount();i++){
-                                name=cursor.getString(1);
-                                department=cursor.getString(7);
-                                rollno=cursor.getString(8);
-                                yearofpass=cursor.getInt(9);
-                                cursor.moveToNext();
-                            }
-                            cursor.close();
-                            bundle.putString("Name",name);
-                            bundle.putString("Department",department);
-                            bundle.putString("RollNo",rollno);
-                            bundle.putInt("YearOfPass",yearofpass);
-                            bundle.putString("Position","Student");
-                            bundle.putString("Email",email);
-                            bundle.putString("Password",password);
-                            studentIntent.putExtras(bundle);
-                            SharedPreferences.Editor editor = sharedpreferences.edit();
-                            editor.putString(Email, email);
-                            editor.commit();
-                            startActivity(studentIntent);
-                            finish();
+                    });
+
+                    dialog.setNeutralButton("Admin", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialogInterface, int i) {
+                            DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Admin");
+                            dbRef.addValueEventListener(new ValueEventListener() {
+
+                                @Override
+                                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                    int result = DatabaseHelper.fetchLoginDetails(snapshot,userEmailID,userPwd);
+                                    if (result==0){
+                                        Snackbar snackbar = Snackbar.make(b1,"Successfully Logged in as Admin",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                        Intent adminIntent = new Intent(RelativeLoginActivity.this, AdminHomePage.class);
+                                        ArrayList<AdminDetails> adminDetails = DatabaseHelper.getAdminDetailsEmail(snapshot,userEmailID);
+                                        String name=adminDetails.get(0).getName();
+                                        Bundle bundle = new Bundle();
+                                        bundle.putString("Position","Admin");
+                                        bundle.putString("Email",userEmailID);
+                                        bundle.putString("Password",userPwd);
+                                        bundle.putString("Name",name);
+                                        adminIntent.putExtras(bundle);
+                                        SharedPreferences.Editor editor = sharedpreferences.edit();
+                                        editor.putString(Email, userEmailID);
+                                        editor.commit();
+                                        startActivity(adminIntent);
+                                        finish();
+                                    }else if (result==1){
+                                        Snackbar snackbar = Snackbar.make(b1,"Invalid Credentials for Admin",Snackbar.LENGTH_LONG);
+                                        snackbar.show();
+                                    }
+                                }
+
+                                @Override
+                                public void onCancelled(@NonNull DatabaseError error) {
+                                    alertFirebaseFailure(error);
+                                    error.toException();
+                                }
+                            });
+                            onResume();
                         }
-                    }
-                    else {
-                        Toast.makeText(RelativeLoginActivity.this, "Invalid Credentials...", Toast.LENGTH_SHORT).show();
-                    }
+                    });
+                    dialog.show();
                 }
             }
         });
@@ -244,6 +296,45 @@ public class RelativeLoginActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 startActivity(new Intent(RelativeLoginActivity.this, RegistrationActivity.class));
+            }
+        });
+
+        forgotPassword.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                android.app.AlertDialog.Builder dialog = new android.app.AlertDialog.Builder(RelativeLoginActivity.this);
+                dialog.setTitle("Role");
+                dialog.setMessage("What is your role in Management Information System?");
+                dialog.setPositiveButton("Faculty", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        Intent intent = new Intent(RelativeLoginActivity.this,ForgotPassword.class);
+                        intent.putExtra("Role","Faculty");
+                        startActivity(intent);
+                        onResume();
+                    }
+                });
+
+                dialog.setNegativeButton("Student", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        Intent intent = new Intent(RelativeLoginActivity.this,ForgotPassword.class);
+                        intent.putExtra("Role","Student");
+                        startActivity(intent);
+                        onResume();
+                    }
+                });
+
+                dialog.setNeutralButton("Admin", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        Intent intent = new Intent(RelativeLoginActivity.this,ForgotPassword.class);
+                        intent.putExtra("Role","Admin");
+                        startActivity(intent);
+                        onResume();
+                    }
+                });
+                dialog.show();
             }
         });
     }

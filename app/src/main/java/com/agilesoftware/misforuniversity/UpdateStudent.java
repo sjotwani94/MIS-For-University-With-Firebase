@@ -10,6 +10,7 @@ import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
+import android.util.Log;
 import android.view.ContextMenu;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -26,6 +27,14 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
+
 public class UpdateStudent extends AppCompatActivity {
     ScrollView s1;
     Button ib1;
@@ -35,12 +44,23 @@ public class UpdateStudent extends AppCompatActivity {
     RadioButton ge1,ge2;
     DBHelper dbHelper;
     String[] departments;
-    String EmailID;
-    private int index;
+    String EmailID, Gender, password, userKey;
+    private String index;
+    ArrayList<StudentDetails> studentDetails = new ArrayList<StudentDetails>();
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,30 +95,42 @@ public class UpdateStudent extends AppCompatActivity {
         }
         departments=getResources().getStringArray(R.array.department);
         EmailID=getIntent().getExtras().getString("Email");
-        index=getIntent().getExtras().getInt("Index");
-        Cursor cursor = dbHelper.getStudentRegistrationDetails(EmailID);
-        cursor.moveToFirst();
-        name.setText(cursor.getString(1));
-        email.setText(cursor.getString(2));
-        address.setText(cursor.getString(3));
-        age.setText(String.valueOf(cursor.getInt(4)));
-        contact.setText(String.valueOf(cursor.getLong(5)));
-        if (cursor.getString(6).matches("Male")){
-            ge1.setChecked(true);
-        }else if (cursor.getString(6).matches("Female")){
-            ge2.setChecked(true);
-        }
-        rollno.setText(cursor.getString(8));
-        batch.setText(String.valueOf(cursor.getLong(9)));
-        String dept = cursor.getString(7);
-        cursor.close();
+        index=getIntent().getExtras().getString("Index");
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Student");
+        dbRef.addValueEventListener(new ValueEventListener() {
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, departments);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        department.setAdapter(adapter);
-        int spinner1Position = 0;
-        spinner1Position = adapter.getPosition(dept);
-        department.setSelection(spinner1Position);
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                studentDetails = DatabaseHelper.getStudentDetailsEmail(snapshot,EmailID);
+                name.setText(studentDetails.get(0).getName());
+                email.setText(studentDetails.get(0).getEMail());
+                address.setText(studentDetails.get(0).getAddress());
+                age.setText(String.valueOf(studentDetails.get(0).getAge()));
+                contact.setText(String.valueOf(studentDetails.get(0).getContactNo()));
+                if (studentDetails.get(0).getGender().matches("Male")){
+                    ge1.setChecked(true);
+                }else if (studentDetails.get(0).getGender().matches("Female")){
+                    ge2.setChecked(true);
+                }
+                rollno.setText(studentDetails.get(0).getRollNo());
+                batch.setText(String.valueOf(studentDetails.get(0).getBatch()));
+                String dept = studentDetails.get(0).getDepartment();
+                password = studentDetails.get(0).getPassword();
+
+                ArrayAdapter<String> adapter = new ArrayAdapter<String>(UpdateStudent.this, android.R.layout.simple_spinner_item, departments);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                department.setAdapter(adapter);
+                int spinner1Position = 0;
+                spinner1Position = adapter.getPosition(dept);
+                department.setSelection(spinner1Position);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
 
         ib1.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -110,39 +142,58 @@ public class UpdateStudent extends AppCompatActivity {
                     Toast.makeText(UpdateStudent.this, "Some Text Field is Empty...", Toast.LENGTH_SHORT).show();
                 }
                 else {
-                    Intent int1=new Intent(UpdateStudent.this,ManageStudents.class);
+                    final Intent int1=new Intent(UpdateStudent.this,ManageStudents.class);
                     LayoutInflater li1=getLayoutInflater();
-                    View layout=li1.inflate(R.layout.custom_toast, (ViewGroup) findViewById(R.id.custom_toast_layout));
+                    final View layout=li1.inflate(R.layout.custom_toast, (ViewGroup) findViewById(R.id.custom_toast_layout));
                     TextView txt= (TextView) layout.findViewById(R.id.text_toast);
                     txt.setText("Student Updated Successfully!");
 
-                    String Name = name.getText().toString();
-                    String EMail = email.getText().toString();
-                    String Address = address.getText().toString();
-                    int Age = Integer.parseInt(age.getText().toString());
-                    long ContactNo = Long.parseLong(contact.getText().toString());
-                    String Gender = "None";
+                    final String Name = name.getText().toString();
+                    final String EMail = email.getText().toString();
+                    final String Address = address.getText().toString();
+                    final int Age = Integer.parseInt(age.getText().toString());
+                    final long ContactNo = Long.parseLong(contact.getText().toString());
                     if(ge1.isChecked()){
                         Gender = "Male";
                     }
                     else if (ge2.isChecked()){
                         Gender = "Female";
                     }
-                    String RollNo = rollno.getText().toString();
-                    String Department = department.getSelectedItem().toString();
-                    int Batch = Integer.parseInt(batch.getText().toString());
+                    final String RollNo = rollno.getText().toString();
+                    final String Department = department.getSelectedItem().toString();
+                    final int Batch = Integer.parseInt(batch.getText().toString());
 
-                    long rowCount = dbHelper.updateStudentRegistrationDetails(index,Name,EMail,Address,Age,ContactNo,Gender,Department,RollNo,Batch);
-
-                    if (rowCount>0){
-                        Toast toast=new Toast(getApplicationContext());
-                        toast.setDuration(Toast.LENGTH_LONG);
-                        toast.setView(layout);
-                        toast.show();
-                        startActivity(int1);
-                        finish();
+                    String emailPattern = "^[\\w!#$%&'*+/=?`{|}~^-]+(?:\\.[\\w!#$%&'*+/=?`{|}~^-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,6}$";
+                    if (Age < 17){
+                        Toast.makeText(getApplicationContext(), "You Are Not Eligible!", Toast.LENGTH_LONG).show();
+                    }else if (!EMail.matches(emailPattern)){
+                        Toast.makeText(getApplicationContext(), "Invalid E-Mail Address...", Toast.LENGTH_LONG).show();
+                    }else if (String.valueOf(ContactNo).length()!=10){
+                        Toast.makeText(getApplicationContext(), "Mobile Number Should have 10 Digits...", Toast.LENGTH_LONG).show();
                     }else {
-                        Toast.makeText(UpdateStudent.this, "No Rows Updated", Toast.LENGTH_SHORT).show();
+                        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Student");
+                        dbRef.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                userKey = DatabaseHelper.retrieveKey(snapshot,EMail);
+                                Log.d("Faculty Key", userKey);
+                                StudentDetails studentDetails = new StudentDetails(Name,EMail,Address,Age,ContactNo,Gender,Department,RollNo,Batch,password);
+                                DatabaseHelper.updateStudent(userKey,studentDetails);
+                                Toast toast=new Toast(getApplicationContext());
+                                toast.setDuration(Toast.LENGTH_LONG);
+                                toast.setView(layout);
+                                toast.show();
+                                startActivity(int1);
+                                finish();
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                     }
                 }
             }

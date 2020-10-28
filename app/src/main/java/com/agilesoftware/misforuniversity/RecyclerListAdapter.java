@@ -2,7 +2,6 @@ package com.agilesoftware.misforuniversity;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.database.Cursor;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,12 +12,17 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class RecyclerListAdapter extends RecyclerView.Adapter<RecyclerListAdapter.MyViewHolder> {
     private List<RecyclerListData> functionsList;
-    DBHelper dbHelper;
-    Cursor cursor;
     String RollNo;
     Context context;
     class MyViewHolder extends RecyclerView.ViewHolder {
@@ -31,6 +35,15 @@ public class RecyclerListAdapter extends RecyclerView.Adapter<RecyclerListAdapte
             courseGrade = view.findViewById(R.id.course_grade);
             resultContainer = view.findViewById(R.id.result_container);
         }
+    }
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(context)
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
     }
     public RecyclerListAdapter(List<RecyclerListData> functionsList, Context context, String RollNo) {
         this.functionsList = functionsList;
@@ -54,24 +67,35 @@ public class RecyclerListAdapter extends RecyclerView.Adapter<RecyclerListAdapte
         holder.resultContainer.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                dbHelper = new DBHelper(context);
-                cursor = dbHelper.getMarksByCourse(RollNo,listData.getCourseDesc().substring(0,5));
-                cursor.moveToFirst();
-                AlertDialog.Builder dialog = new AlertDialog.Builder(context);
-                dialog.setTitle(listData.getCourseDesc());
-                dialog.setMessage("Class Test: "+cursor.getInt(0)+"/30\n"+
-                "Mid Sem Exam: "+cursor.getInt(1)+"/40\n"+
-                "Assignment Marks: "+cursor.getInt(2)+"/30\n"+
-                "Laboratory Practicals' Marks: "+cursor.getInt(3)+"/100\n"+
-                "Final Exam Marks: "+cursor.getInt(4)+"/100");
-                dialog.setPositiveButton("Go Back", new DialogInterface.OnClickListener() {
+                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/StudentEnrollments");
+                dbRef.addValueEventListener(new ValueEventListener() {
+
                     @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        dialogInterface.dismiss();
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        ArrayList<StudentEnrollments> studentEnrollments = DatabaseHelper.getStudentEnrollmentDetails(snapshot,RollNo,listData.getCourseDesc().substring(0,5));
+                        AlertDialog.Builder dialog = new AlertDialog.Builder(context);
+                        dialog.setTitle(listData.getCourseDesc());
+                        dialog.setMessage("Class Test: "+studentEnrollments.get(0).getClassTest()+"/30\n"+
+                                "Mid Sem Exam: "+studentEnrollments.get(0).getMidSem()+"/40\n"+
+                                "Assignment Marks: "+studentEnrollments.get(0).getAssignments()+"/30\n"+
+                                "Laboratory Practicals' Marks: "+studentEnrollments.get(0).getLabPracticals()+"/100\n"+
+                                "Final Exam Marks: "+studentEnrollments.get(0).getFinalExam()+"/100");
+                        dialog.setPositiveButton("Go Back", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                dialogInterface.dismiss();
+                            }
+                        });
+
+                        dialog.show();
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        alertFirebaseFailure(error);
+                        error.toException();
                     }
                 });
-
-                dialog.show();
             }
         });
     }

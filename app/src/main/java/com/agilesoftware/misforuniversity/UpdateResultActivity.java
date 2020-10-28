@@ -5,7 +5,6 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.database.Cursor;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.Html;
@@ -22,6 +21,12 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,15 +34,27 @@ public class UpdateResultActivity extends AppCompatActivity implements AdapterVi
     EditText classTest,midSem,assignment,labPrac,finalExam;
     Spinner rollNum,courseCode;
     Button submit,fetch;
-    DBHelper dbHelper;
     List<String> listOfCourseCodes = new ArrayList<String>();
+    List<String> listOfCourseNames = new ArrayList<String>();
     List<String> listOfCourses = new ArrayList<String>();
     List<String> listOfRollNos = new ArrayList<String>();
+    ArrayList<CourseDetails> courseDetails = new ArrayList<CourseDetails>();
+    ArrayList<StudentDetails> studentDetails = new ArrayList<StudentDetails>();
     ScrollView s1;
     SharedPreferences sharedpreferences;
     public static final String mypreference = "mypref";
     public static final String Email = "emailKey";
     public static final String Theme = "themeKey";
+
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(getApplicationContext())
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,7 +70,6 @@ public class UpdateResultActivity extends AppCompatActivity implements AdapterVi
         courseCode=findViewById(R.id.list_courses);
         submit=findViewById(R.id.submit_course);
         fetch=findViewById(R.id.fetch_course);
-        dbHelper=new DBHelper(this);
         sharedpreferences = getSharedPreferences(mypreference, Context.MODE_PRIVATE);
         if (sharedpreferences.contains(Theme)){
             if (sharedpreferences.getString(Theme,"").matches("Light")){
@@ -68,53 +84,94 @@ public class UpdateResultActivity extends AppCompatActivity implements AdapterVi
         }
         String Department = getIntent().getStringExtra("Department");
         String[] Splitted = Department.split(" ");
-        String ShortForm = Splitted[0].substring(0,1)+Splitted[1].substring(0,1);
+        final String ShortForm = Splitted[0].substring(0,1)+Splitted[1].substring(0,1);
         Log.d("Dept", "Department: "+ShortForm);
-        Cursor cursor1 = dbHelper.getCourseDetailsWithFilter(ShortForm);
-        cursor1.moveToFirst();
-        for (int i =0; i<cursor1.getCount();i++)
-        {
-            listOfCourseCodes.add(cursor1.getString(0));
-            listOfCourses.add(cursor1.getString(0)+" ("+cursor1.getString(1)+")");
-            cursor1.moveToNext();
-        }
-        cursor1.close();
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, listOfCourses);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        courseCode.setAdapter(adapter);
-        courseCode.setOnItemSelectedListener(this);
+        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/Courses");
+        dbRef.addValueEventListener(new ValueEventListener() {
+
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                courseDetails = DatabaseHelper.getCourseDetailsWithFilter(snapshot,ShortForm);
+                for (int i =0; i<courseDetails.size();i++)
+                {
+                    listOfCourseCodes.add(courseDetails.get(i).getCourseCode());
+                    listOfCourseNames.add(courseDetails.get(i).getCourseName());
+                    listOfCourses.add(courseDetails.get(i).getCourseCode()+" ("+courseDetails.get(i).getCourseName()+")");
+                }
+                ArrayAdapter<String> adapter = new ArrayAdapter<String>(UpdateResultActivity.this, android.R.layout.simple_spinner_item, listOfCourses);
+                adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                courseCode.setAdapter(adapter);
+                courseCode.setOnItemSelectedListener(UpdateResultActivity.this);
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+                alertFirebaseFailure(error);
+                error.toException();
+            }
+        });
         submit.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                int classtest = Integer.parseInt(classTest.getText().toString());
-                int midsem = Integer.parseInt(midSem.getText().toString());
-                int assign = Integer.parseInt(assignment.getText().toString());
-                int labprac = Integer.parseInt(labPrac.getText().toString());
-                int finalexam = Integer.parseInt(finalExam.getText().toString());
-                String rollno = rollNum.getSelectedItem().toString();
-                String coursecode = courseCode.getSelectedItem().toString().substring(0,5);
-                int result = dbHelper.updateMarks(rollno,coursecode,classtest,midsem,assign,labprac,finalexam);
-                classTest.setText("");
-                midSem.setText("");
-                assignment.setText("");
-                labPrac.setText("");
-                finalExam.setText("");
-                Toast.makeText(UpdateResultActivity.this, "Marks Updated Successfully!", Toast.LENGTH_SHORT).show();
+                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/StudentEnrollments");
+                dbRef.addValueEventListener(new ValueEventListener() {
+
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        String rollno = rollNum.getSelectedItem().toString();
+                        String coursecode = courseCode.getSelectedItem().toString().substring(0,5);
+                        String enrollmentKey = DatabaseHelper.retrieveEnrollmentKey(snapshot,rollno,coursecode);
+                        ArrayList<StudentEnrollments> studentEnrollments = DatabaseHelper.getStudentEnrollmentDetails(snapshot,rollno,coursecode);
+                        String coursename = studentEnrollments.get(0).getCourseName();
+                        int presence = studentEnrollments.get(0).getTotalPresence();
+                        int lectures = studentEnrollments.get(0).getTotalLectures();
+                        int classtest = Integer.parseInt(classTest.getText().toString());
+                        int midsem = Integer.parseInt(midSem.getText().toString());
+                        int assign = Integer.parseInt(assignment.getText().toString());
+                        int labprac = Integer.parseInt(labPrac.getText().toString());
+                        int finalexam = Integer.parseInt(finalExam.getText().toString());
+                        StudentEnrollments studentEnrollments1 = new StudentEnrollments(rollno,coursecode,coursename,classtest,midsem,assign,labprac,finalexam,presence,lectures);
+                        DatabaseHelper.updateStudentEnrollment(studentEnrollments1,enrollmentKey);
+                        classTest.setText("");
+                        midSem.setText("");
+                        assignment.setText("");
+                        labPrac.setText("");
+                        finalExam.setText("");
+                        Toast.makeText(UpdateResultActivity.this, "Marks Updated Successfully!", Toast.LENGTH_SHORT).show();
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        alertFirebaseFailure(error);
+                        error.toException();
+                    }
+                });
             }
         });
         fetch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                String rollno = rollNum.getSelectedItem().toString();
-                String coursecode = courseCode.getSelectedItem().toString().substring(0,5);
-                Cursor cursor = dbHelper.getMarksByCourse(rollno,coursecode);
-                cursor.moveToFirst();
-                classTest.setText(String.valueOf(cursor.getInt(0)));
-                midSem.setText(String.valueOf(cursor.getInt(1)));
-                assignment.setText(String.valueOf(cursor.getInt(2)));
-                labPrac.setText(String.valueOf(cursor.getInt(3)));
-                finalExam.setText(String.valueOf(cursor.getInt(4)));
-                cursor.close();
+                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/StudentEnrollments");
+                dbRef.addValueEventListener(new ValueEventListener() {
+
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        String rollno = rollNum.getSelectedItem().toString();
+                        String coursecode = courseCode.getSelectedItem().toString().substring(0,5);
+                        ArrayList<StudentEnrollments> studentEnrollments = DatabaseHelper.getStudentEnrollmentDetails(snapshot,rollno,coursecode);
+                        classTest.setText(String.valueOf(studentEnrollments.get(0).getClassTest()));
+                        midSem.setText(String.valueOf(studentEnrollments.get(0).getMidSem()));
+                        assignment.setText(String.valueOf(studentEnrollments.get(0).getAssignments()));
+                        labPrac.setText(String.valueOf(studentEnrollments.get(0).getLabPracticals()));
+                        finalExam.setText(String.valueOf(studentEnrollments.get(0).getFinalExam()));
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        alertFirebaseFailure(error);
+                        error.toException();
+                    }
+                });
             }
         });
     }
@@ -141,18 +198,26 @@ public class UpdateResultActivity extends AppCompatActivity implements AdapterVi
             case R.id.list_courses:
                 switch (position){
                     default:
-                        listOfRollNos.clear();
-                        Cursor cursor = dbHelper.getStudentByCourse(listOfCourseCodes.get(position));
-                        cursor.moveToFirst();
-                        for (int i =0; i<cursor.getCount();i++)
-                        {
-                            listOfRollNos.add(cursor.getString(0));
-                            cursor.moveToNext();
-                        }
-                        cursor.close();
-                        ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this,android.R.layout.simple_spinner_item,listOfRollNos);
-                        adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-                        rollNum.setAdapter(adapter1);
+                        final int pos = position;
+                        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/StudentEnrollments");
+                        dbRef.addValueEventListener(new ValueEventListener() {
+
+                            @Override
+                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                listOfRollNos.clear();
+                                ArrayList<String> studentEnrollments = DatabaseHelper.getStudentEnrollmentCourses(snapshot,listOfCourseCodes.get(pos));
+                                listOfRollNos.addAll(studentEnrollments);
+                                ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(UpdateResultActivity.this,android.R.layout.simple_spinner_item,listOfRollNos);
+                                adapter1.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+                                rollNum.setAdapter(adapter1);
+                            }
+
+                            @Override
+                            public void onCancelled(@NonNull DatabaseError error) {
+                                alertFirebaseFailure(error);
+                                error.toException();
+                            }
+                        });
                         break;
                 }
                 break;

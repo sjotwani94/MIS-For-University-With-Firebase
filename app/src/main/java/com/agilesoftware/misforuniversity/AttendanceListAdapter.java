@@ -2,7 +2,6 @@ package com.agilesoftware.misforuniversity;
 
 import android.content.Context;
 import android.content.DialogInterface;
-import android.database.Cursor;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -13,12 +12,17 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.recyclerview.widget.RecyclerView;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
+
+import java.util.ArrayList;
 import java.util.List;
 
 public class AttendanceListAdapter extends RecyclerView.Adapter<AttendanceListAdapter.MyViewHolder> {
     private List<AttendanceListData> functionsList;
-    DBHelper dbHelper;
-    Cursor cursor;
     String RollNo;
     Context context;
     class MyViewHolder extends RecyclerView.ViewHolder {
@@ -31,6 +35,15 @@ public class AttendanceListAdapter extends RecyclerView.Adapter<AttendanceListAd
             coursePenalty = view.findViewById(R.id.course_attend_category);
             attendanceContainer = view.findViewById(R.id.attendance_container);
         }
+    }
+    public void alertFirebaseFailure(DatabaseError error) {
+
+        android.app.AlertDialog alertDialog = new android.app.AlertDialog.Builder(context)
+                .setTitle("An error occurred while connecting to Firebase!")
+                .setMessage(error.toString())
+                .setPositiveButton("Dismiss", null)
+                .setIcon(android.R.drawable.presence_busy)
+                .show();
     }
     public AttendanceListAdapter(List<AttendanceListData> functionsList, Context context, String RollNo) {
         this.functionsList = functionsList;
@@ -54,21 +67,32 @@ public class AttendanceListAdapter extends RecyclerView.Adapter<AttendanceListAd
         holder.attendanceContainer.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                dbHelper = new DBHelper(context);
-                cursor = dbHelper.getAttendanceByCourse(RollNo,listData.getCourseDesc().substring(0,5));
-                cursor.moveToFirst();
-                AlertDialog.Builder dialog = new AlertDialog.Builder(context);
-                dialog.setTitle(listData.getCourseDesc());
-                dialog.setMessage("Total Presence: "+cursor.getInt(0)+"/"+cursor.getInt(1)+" Lectures\n"+
-                        "Total Absence: "+(cursor.getInt(1) - cursor.getInt(0))+"/"+cursor.getInt(1)+" Lectures");
-                dialog.setPositiveButton("Go Back", new DialogInterface.OnClickListener() {
+                DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference("/StudentEnrollments");
+                dbRef.addValueEventListener(new ValueEventListener() {
+
                     @Override
-                    public void onClick(DialogInterface dialogInterface, int i) {
-                        dialogInterface.dismiss();
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        ArrayList<StudentEnrollments> studentEnrollments = DatabaseHelper.getStudentEnrollmentDetails(snapshot,RollNo,listData.getCourseDesc().substring(0,5));
+                        AlertDialog.Builder dialog = new AlertDialog.Builder(context);
+                        dialog.setTitle(listData.getCourseDesc());
+                        dialog.setMessage("Total Presence: "+studentEnrollments.get(0).getTotalPresence()+"/"+studentEnrollments.get(0).getTotalLectures()+" Lectures\n"+
+                                "Total Absence: "+(studentEnrollments.get(0).getTotalLectures() - studentEnrollments.get(0).getTotalPresence())+"/"+studentEnrollments.get(0).getTotalLectures()+" Lectures");
+                        dialog.setPositiveButton("Go Back", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialogInterface, int i) {
+                                dialogInterface.dismiss();
+                            }
+                        });
+
+                        dialog.show();
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        alertFirebaseFailure(error);
+                        error.toException();
                     }
                 });
-
-                dialog.show();
             }
         });
     }
